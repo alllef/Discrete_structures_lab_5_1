@@ -4,6 +4,8 @@
 #include <fstream>
 #include<Windows.h>
 #include<limits>
+#include <algorithm>
+#include <iomanip>
 
 using namespace std;
 
@@ -14,24 +16,51 @@ public:
     double weight;
 };
 
+struct FloydAlgorithmResults {
+public:
+    double *distanceMatrix;
+    int *historyMatrix;
+};
+
+struct DijkstraAlgorithmResults {
+public:
+    vector<int> path;
+    vector<double> distance;
+};
+
 void initializeGraph(int &picks, int &ribs, vector<Rib> &structRibs);
 
 void sortRibs(int &picks, int &ribs, vector<Rib> &structRibs);
 
-void DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int startPick);
+DijkstraAlgorithmResults DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int startPick);
 
 int PickExists(int pick, vector<Rib> structRibs, vector<bool> isMarked, vector<bool> isRibUsed);
 
 int findMin(const double *calculationsMatrix, int i, int picks);
 
-void printMatrix(const double *matrix, int picks);
+double *makeContiguityWeightMatrix(int &picks, int &ribs, vector<Rib> &structRibs);
+
+FloydAlgorithmResults FloydAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs);
+
+int *setupHistoryMatrix(int picks);
+
+void printShortestPathFloydAlgorithm(FloydAlgorithmResults results, int startPick, int endPick, int picks);
+
+void printFloydMatrix(FloydAlgorithmResults results, int picks);
+
+void printDijkstraAlgorithmPath(vector<int> path, int startPick, int endPick);
+
+void printDijkstraShortestDistance(const vector<double>& distance, int startPick);
 
 int main() {
     vector<Rib> ribsList;
     int n = 0, m = 0;
+    SetConsoleOutputCP(CP_UTF8);
     initializeGraph(n, m, ribsList);
     sortRibs(n, m, ribsList);
     DijkstraAlgorithm(n, m, ribsList, 1);
+    FloydAlgorithmResults results = FloydAlgorithm(n, m, ribsList);
+    printShortestPathFloydAlgorithm(results, 1, 3, n);
     return 0;
 }
 
@@ -67,7 +96,7 @@ void sortRibs(int &picks, int &ribs, vector<Rib> &structRibs) {
     }
 }
 
-void DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int startPick) {
+DijkstraAlgorithmResults DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int startPick) {
 
     double currentDistance = 0;
     int currentPick = startPick;
@@ -75,6 +104,7 @@ void DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int start
     vector<double> picksDistance(picks);
     auto *calculationsMatrix = new double[picks * picks];
     vector<bool> isRibUsed(structRibs.size());
+    vector<int> path;
 
     for (int i = 0; i < picks; i++) {
         for (int j = 0; j < picks; j++) {
@@ -85,11 +115,13 @@ void DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int start
     picksDistance[currentPick - 1] = currentDistance;
     isMarked[currentPick - 1] = true;
     *(calculationsMatrix + 0 * picks + 0) = currentDistance;
+    path.push_back(currentPick);
 
     for (int i = 1; i < picks; i++) {
         while (PickExists(currentPick, structRibs, isMarked, isRibUsed)) {
 
             int ribIndex = PickExists(currentPick, structRibs, isMarked, isRibUsed) - 1;
+            if (structRibs[ribIndex].weight < 0) return {};
             isRibUsed[ribIndex] = true;
             int pickIndex = structRibs[ribIndex].end - 1;
 
@@ -97,14 +129,18 @@ void DijkstraAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs, int start
                 *(calculationsMatrix + i * picks + pickIndex) = currentDistance + structRibs[ribIndex].weight;
             } else *(calculationsMatrix + i * picks + pickIndex) = *(calculationsMatrix + (i - 1) * picks + pickIndex);
         }
+
         int minPickIndex = findMin(calculationsMatrix, i, picks);
         currentPick = minPickIndex + 1;
+        path.push_back(currentPick);
         currentDistance = *(calculationsMatrix + i * picks + minPickIndex);
         picksDistance[minPickIndex] = currentDistance;
         isMarked[minPickIndex] = true;
     }
-    cout<<findMin(calculationsMatrix, 2, picks)<<endl;
-    printMatrix(calculationsMatrix, picks);
+    DijkstraAlgorithmResults results{};
+    results.distance = picksDistance;
+    results.path = path;
+    return results;
 }
 
 int PickExists(int pick, vector<Rib> structRibs, vector<bool> isMarked, vector<bool> isRibUsed) {
@@ -119,22 +155,115 @@ int PickExists(int pick, vector<Rib> structRibs, vector<bool> isMarked, vector<b
 }
 
 int findMin(const double *calculationsMatrix, int i, int picks) {
-    int index = 0;
-    for (int j = 0; j < picks - 1; j++) {
-        if(i==2) cout<<*(calculationsMatrix +i * picks + j)<< " ";
-        if ((*(calculationsMatrix +i * picks + j)) > (*(calculationsMatrix + i * picks + (j+1))))
-            index = j+1;
+    vector<double> tmpVector(picks);
 
+    for (int j = 0; j < picks; j++) {
+        tmpVector[j] = *(calculationsMatrix + i * picks + j);
     }
-    cout<<endl;
-    return index;
+
+    auto result = std::min_element(tmpVector.begin(), tmpVector.end());
+    return std::distance(tmpVector.begin(), result);
 }
 
-void printMatrix(const double *matrix, int picks) {
+double *makeContiguityWeightMatrix(int &picks, int &ribs, vector<Rib> &structRibs) {
+    auto *contiguityWeightMatrix = new double[picks * picks];
+
     for (int i = 0; i < picks; i++) {
         for (int j = 0; j < picks; j++) {
-            cout << *(matrix + i * picks + j) << " ";
+            *(contiguityWeightMatrix + i * picks + j) = DBL_MAX;
+            if (i == j)*(contiguityWeightMatrix + i * picks + j) = 0;
+        }
+    }
+    for (int i = 0; i < ribs; i++) {
+        if (structRibs[i].start != structRibs[i].end)
+            *(contiguityWeightMatrix + (structRibs[i].start - 1) * picks +
+              (structRibs[i].end - 1)) = structRibs[i].weight;
+    }
+    return contiguityWeightMatrix;
+}
+
+FloydAlgorithmResults FloydAlgorithm(int &picks, int &ribs, vector<Rib> &structRibs) {
+
+    auto *distanceMatrix = makeContiguityWeightMatrix(picks, ribs, structRibs);
+    int *historyMatrix = setupHistoryMatrix(picks);
+
+    for (int k = 0; k < picks; k++) {
+        for (int i = 0; i < picks; i++) {
+            for (int j = 0; j < picks; j++) {
+                if (min(*(distanceMatrix + i * picks + j),
+                        *(distanceMatrix + i * picks + k) +
+                        *(distanceMatrix + k * picks + j)) != *(distanceMatrix + i * picks + j))
+                    *(historyMatrix + i * picks + j) = k + 1;
+
+                *(distanceMatrix + i * picks + j) = min(*(distanceMatrix + i * picks + j),
+                                                        *(distanceMatrix + i * picks + k) +
+                                                        *(distanceMatrix + k * picks + j));
+                if (i == j && *(distanceMatrix) + i * picks + j < 0) break;
+            }
+        }
+
+    }
+
+    FloydAlgorithmResults results{};
+    results.distanceMatrix = distanceMatrix;
+    results.historyMatrix = historyMatrix;
+    return results;
+}
+
+int *setupHistoryMatrix(int picks) {
+    int *setupMatrix = new int[picks * picks];
+    for (int i = 0; i < picks; i++) {
+        for (int j = 0; j < picks; j++) {
+            *(setupMatrix + i * picks + j) = i + 1;
+            if (i == j)*(setupMatrix + i * picks + j) = 0;
+        }
+    }
+    return setupMatrix;
+}
+
+void printFloydMatrix(FloydAlgorithmResults results, int picks) {
+    for (int k = 0; k < 2; k++) {
+        if (k == 0) cout << " Матриця відстаней\n";
+        else cout << "Матриця історії\n";
+        for (int i = 0; i < picks; i++) {
+            for (int j = 0; j < picks; j++) {
+                if (k == 0) cout << setw(3) << *(results.distanceMatrix + i * picks + j);
+                else cout << setw(3) << *(results.historyMatrix + i * picks + j);
+            }
+            cout << endl;
         }
         cout << endl;
+    }
+}
+
+void printShortestPathFloydAlgorithm(FloydAlgorithmResults results, int startPick, int endPick, int picks) {
+    vector<int> path;
+    path.push_back(endPick);
+
+    while (*(results.historyMatrix + (startPick - 1) * picks + (endPick - 1)) != startPick) {
+        endPick = *(results.historyMatrix + (startPick - 1) * picks + (endPick - 1));
+        path.push_back(endPick);
+    }
+    path.push_back(startPick);
+
+    cout << " Маршрут від вершини " << startPick << "до " << endPick << endl;
+    for (int i = path.size() - 1; i >= 0; i--) {
+        cout << path[i] << " ";
+    }
+}
+
+void printDijkstraAlgorithmPath(vector<int> path, int startPick, int endPick) {
+    cout << " Маршрут від вершини " << startPick << "до " << endPick << endl;
+    int i = 0;
+    do {
+        cout << path[i];
+        i++;
+    } while (path[i] != endPick);
+}
+
+void printDijkstraShortestDistance(const vector<double>& distance, int startPick) {
+    cout<< "Відстань від"<<startPick<<"складає\n";
+    for (int i = 1; i < distance.size(); i++){
+         cout<< "До вершини"<<i+1<<" "<<distance[i];
     }
 }
