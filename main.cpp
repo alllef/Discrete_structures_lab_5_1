@@ -50,17 +50,18 @@ void printFloydMatrix(FloydAlgorithmResults results, int picks);
 
 void printDijkstraAlgorithmPath(vector<int> path, int startPick, int endPick);
 
-void printDijkstraShortestDistance(const vector<double>& distance, int startPick);
+void printDijkstraShortestDistance(const vector<double> &distance, int startPick);
+
+void makeMenu(int &picks, int &ribs, vector<Rib> &structRibs);
 
 int main() {
     vector<Rib> ribsList;
     int n = 0, m = 0;
     SetConsoleOutputCP(CP_UTF8);
-    initializeGraph(n, m, ribsList);
-    sortRibs(n, m, ribsList);
-    DijkstraAlgorithm(n, m, ribsList, 1);
-    FloydAlgorithmResults results = FloydAlgorithm(n, m, ribsList);
-    printShortestPathFloydAlgorithm(results, 1, 3, n);
+    makeMenu(n,m,ribsList);
+
+
+
     return 0;
 }
 
@@ -198,7 +199,10 @@ FloydAlgorithmResults FloydAlgorithm(int &picks, int &ribs, vector<Rib> &structR
                 *(distanceMatrix + i * picks + j) = min(*(distanceMatrix + i * picks + j),
                                                         *(distanceMatrix + i * picks + k) +
                                                         *(distanceMatrix + k * picks + j));
-                if (i == j && *(distanceMatrix) + i * picks + j < 0) break;
+                if (i == j && *(distanceMatrix) + i * picks + j < 0) {
+                    *(distanceMatrix + i * picks + j) = 0;
+                    break;
+                }
             }
         }
 
@@ -246,24 +250,63 @@ void printShortestPathFloydAlgorithm(FloydAlgorithmResults results, int startPic
     }
     path.push_back(startPick);
 
-    cout << " Маршрут від вершини " << startPick << "до " << endPick << endl;
+    cout << "Маршрут від вершини " << startPick << " до " << path[0] << ": \n";
     for (int i = path.size() - 1; i >= 0; i--) {
         cout << path[i] << " ";
     }
+    cout << endl;
 }
 
 void printDijkstraAlgorithmPath(vector<int> path, int startPick, int endPick) {
-    cout << " Маршрут від вершини " << startPick << "до " << endPick << endl;
+    cout << " Маршрут від вершини " << startPick << " до " << endPick << ": ";
     int i = 0;
     do {
-        cout << path[i];
+        cout << path[i] << setw(2);
         i++;
     } while (path[i] != endPick);
+    cout << path[i];
+    cout << endl;
+
 }
 
-void printDijkstraShortestDistance(const vector<double>& distance, int startPick) {
-    cout<< "Відстань від"<<startPick<<"складає\n";
-    for (int i = 1; i < distance.size(); i++){
-         cout<< "До вершини"<<i+1<<" "<<distance[i];
+void printDijkstraShortestDistance(const vector<double> &distance, int startPick) {
+    cout << "Відстань від " << startPick << " складає\n";
+    for (int i = 1; i < distance.size(); i++) {
+        cout << "До вершини " << i + 1 << ": " << distance[i] << endl;
     }
+}
+
+void makeMenu(int &picks, int &ribs, vector<Rib> &structRibs) {
+
+    int startPick;
+    int endPick;
+    bool isFloyd;
+
+    initializeGraph(picks, ribs, structRibs);
+    sortRibs(picks, ribs, structRibs);
+
+    cout << " Введіть 0 якщо хочете скористуватись алгоритмом Дійкстри та 1 якщо алгоритмом Флойда-Уоршелла";
+    cin >> isFloyd;
+    cout << endl;
+
+    if (isFloyd) {
+        FloydAlgorithmResults results = FloydAlgorithm(picks, ribs, structRibs);
+        printFloydMatrix(results, picks);
+        cout << "Введіть маршрут між вершинами який ви хочете побачити. Вершини можуть бути від 1 до " << picks;
+
+        cin>>startPick>>endPick;
+        printShortestPathFloydAlgorithm(results, startPick, endPick, picks);
+
+    }
+    else{
+        cout<< "Введіть вершину від 1 до "<<picks<< "від якої хочете почати виконувати алгоритм";
+        cin>>startPick;
+        cout<<endl;
+        DijkstraAlgorithmResults results = DijkstraAlgorithm(picks, ribs, structRibs, startPick);
+        printDijkstraShortestDistance(results.distance, startPick);
+        cout<< "Введіть вершину до якої хочете побачити маршрут з вершини"<<startPick;
+        cin>>endPick;
+        printDijkstraAlgorithmPath(results.path, startPick, endPick);
+    }
+
 }
